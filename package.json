@@ -8,8 +8,8 @@
   },
   "scripts": {
   "dev": "tsx server.ts",
-  "start": "tsx server.ts",
-  "build": "vite build",
+  "start": "node server.ts",
+ "build": "echo no build",
   "preview": "vite preview",
   "clean": "rm -rf dist",
   "lint": "tsc --noEmit"
