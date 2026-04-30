@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   return {
+    // ✅ CRITICAL FIX for Railway / production asset loading
+    base: "/",
+
     plugins: [react()],
 
     define: {
