@@ -1,5 +1,0 @@
-[phases.build]
-cmds = ["echo skipping build"]
-
-[start]
-cmds = ["npm run start"]
