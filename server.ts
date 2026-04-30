@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import admin from "firebase-admin";
@@ -9,29 +8,28 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ================= FIREBASE ADMIN INIT =================
+// ================= FIREBASE INIT =================
 let db: FirebaseFirestore.Firestore | null = null;
 
 try {
   const serviceAccountPath = path.join(process.cwd(), "firebase-admin-key.json");
 
-  if (!fs.existsSync(serviceAccountPath)) {
-    throw new Error("firebase-admin-key.json not found");
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(
+      fs.readFileSync(serviceAccountPath, "utf-8")
+    );
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+
+    db = admin.firestore();
+    console.log("Firebase Admin initialized");
+  } else {
+    console.log("Firebase key missing (running without DB)");
   }
-
-  const serviceAccount = JSON.parse(
-    fs.readFileSync(serviceAccountPath, "utf-8")
-  );
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-
-  db = admin.firestore();
-
-  console.log("Firebase Admin initialized");
-} catch (error) {
-  console.error("Firebase init error:", error);
+} catch (err) {
+  console.error("Firebase init error:", err);
 }
 
 // ================= INIT DATA =================
@@ -47,30 +45,26 @@ async function initStations() {
       hopperLevels: { cat: 85, dog: 92 },
       lastSeen: FieldValue.serverTimestamp(),
     });
-
-    console.log("Alijis station created");
   }
 }
 
-// ================= SERVER =================
+// ================= APP =================
 async function startServer() {
   await initStations();
 
   const app = express();
   const PORT = process.env.PORT || 8080;
 
-  // ✅ REQUIRED (fix req.body = undefined issue)
+  // ================= MIDDLEWARE =================
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // ================= FEED ENDPOINT =================
+  // ================= API =================
   app.all("/api/feed", async (req, res) => {
     if (!db) return res.status(500).send("DB not ready");
 
-    // accept both POST (Arduino) and GET (testing)
     const data = req.method === "POST" ? req.body : req.query;
 
-    // ❌ FIX: check missing data properly (your old check was wrong)
     if (!data || Object.keys(data).length === 0) {
       return res.status(400).json({ error: "No data received" });
     }
@@ -86,7 +80,6 @@ async function startServer() {
     try {
       const logId = Math.random().toString(36).substring(7);
 
-      // ================= SAVE LOG =================
       await db.collection("logs").doc(logId).set({
         location,
         type,
@@ -95,7 +88,6 @@ async function startServer() {
         timestamp,
       });
 
-      // ================= UPDATE STATION =================
       const stationRef = db.collection("stations").doc(location);
       const stationDoc = await stationRef.get();
 
@@ -114,41 +106,36 @@ async function startServer() {
         { merge: true }
       );
 
-      return res.json({
+      res.json({
         success: true,
         location,
         type,
         coins,
         grams,
-        timestamp: "server-time",
       });
-
     } catch (err) {
-      console.error("Feed error:", err);
-      return res.status(500).json({ error: "server error" });
+      console.error(err);
+      res.status(500).json({ error: "server error" });
     }
   });
 
-  // ================= VITE =================
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+  // ================= ROOT API =================
+  app.get("/", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "dist", "index.html"));
+  });
 
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
+  // ================= SERVE REACT DASHBOARD =================
+  const distPath = path.join(process.cwd(), "dist");
 
-    app.use(express.static(distPath));
+  app.use(express.static(distPath));
 
-    app.get("*", (_, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
 
+  // ================= START =================
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log("Server running on port", PORT);
   });
 }
 
