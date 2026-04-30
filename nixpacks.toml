@@ -2,4 +2,4 @@
 cmds = ["echo skipping build"]
 
 [start]
-cmd = "npm run start"
+cmds = ["npm run start"]
