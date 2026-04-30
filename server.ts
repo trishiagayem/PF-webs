@@ -119,11 +119,6 @@ async function startServer() {
     }
   });
 
-  // ================= ROOT API =================
-  app.get("/", (req, res) => {
-    res.sendFile(path.join(process.cwd(), "dist", "index.html"));
-  });
-
   // ================= SERVE REACT DASHBOARD =================
   const distPath = path.join(process.cwd(), "dist");
 
